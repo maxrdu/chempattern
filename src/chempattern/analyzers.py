@@ -14,12 +14,14 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.preprocessing import StandardScaler
 
-from PAMI.frequentPattern.basic.FPGrowth import FPGrowth  # Fixed
+from PAMI.frequentPattern.basic import FPGrowth as fpgrowth
+from PAMI.AssociationRules.basic import confidence as post_process
+from PAMI.highUtilityPattern.basic import EFIM as fhm
 
-# TODO: These do not work
-from PAMI.arm import post_process
-from PAMI.huim import fhm
-from PAMI.cep import erminer
+# TODO: erminer (contrast/emerging pattern mining) is not available in PAMI
+# PAMI does not have a contrast pattern or emerging pattern mining module
+# The ContrastAnalyzer will need to be refactored to use a different approach
+# from PAMI.cep import erminer  # This module does not exist in PAMI
 
 from .discretizers import BaseDiscretizer
 
