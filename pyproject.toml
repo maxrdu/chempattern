@@ -1,0 +1,70 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "chempattern"
+version = "0.1.0"
+description = "Composable chemical pattern mining toolkit for drug discovery"
+authors = [
+    {name = "Max Rausch-Dupont", email = "max@rausch-dupont.de"}
+]
+readme = "README.md"
+license = {text = "GPL-3.0-only"}
+keywords = ["chemistry", "pattern-mining", "drug-discovery", "cheminformatics"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+requires-python = ">=3.12"
+dependencies = [
+    "pami>=2025.7.3.1",
+    "pandas>=2.3.3",
+    "scikit-fingerprints>=1.17.0",
+    "scikit-learn<1.6.0",
+    "rdkit>=2022.3.1",
+    "scikit-mine>=1.0.0",
+    "seaborn>=0.13.2",
+    "matplotlib>=3.4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=3.0",
+    "ruff"
+]
+[dependency-groups]
+examples = [
+    "ipykernel>=7.1.0",
+    "jupyterlab>=4.4.10",
+]
+
+[project.scripts]
+chempattern = "chempattern.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/maxrdu/chempattern"
+Repository = "https://github.com/maxrdu/chempattern"
+"Bug Tracker" = "https://github.com/maxrdu/chempattern/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+chempattern = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
