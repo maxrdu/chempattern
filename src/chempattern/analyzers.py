@@ -6,6 +6,7 @@ utility mining, and frequency mining.
 """
 
 import os
+import tempfile
 import pandas as pd
 import numpy as np
 import logging
@@ -24,6 +25,41 @@ from PAMI.highUtilityPattern.basic import EFIM as fhm
 # from PAMI.cep import erminer  # This module does not exist in PAMI
 
 from .discretizers import BaseDiscretizer
+
+
+def _write_transactions_to_file(transactions, filepath, sep='\t'):
+    """Write transactions to a file in PAMI format.
+
+    Args:
+        transactions (list): List of transactions, where each transaction is a list of items
+        filepath (str): Path to output file
+        sep (str): Separator to use (default: tab)
+    """
+    with open(filepath, 'w') as f:
+        for transaction in transactions:
+            if transaction:  # Skip empty transactions
+                f.write(sep.join(str(item) for item in transaction) + '\n')
+
+
+def _write_utility_transactions_to_file(transactions, utilities, filepath):
+    """Write transactions with utilities to a file in PAMI EFIM format.
+
+    EFIM format: item1 item2 item3:total_utility:utility1 utility2 utility3
+
+    Args:
+        transactions (list): List of transactions, where each transaction is a list of items
+        utilities (list): List of utilities (one per transaction)
+        filepath (str): Path to output file
+    """
+    with open(filepath, 'w') as f:
+        for transaction, total_utility in zip(transactions, utilities):
+            if transaction:  # Skip empty transactions
+                # For EFIM, we assign equal utility to all items in the transaction
+                num_items = len(transaction)
+                item_utility = int(total_utility / num_items) if num_items > 0 else 0
+                items_str = ' '.join(str(item) for item in transaction)
+                utilities_str = ' '.join(str(item_utility) for _ in transaction)
+                f.write(f"{items_str}:{int(total_utility)}:{utilities_str}\n")
 
 
 class BaseAnalyzer(ABC):
@@ -178,66 +214,78 @@ class ContrastAnalyzer(BaseAnalyzer):
             self.logger.warning("CEP: Skipping, one class has no transactions.")
             return {'data': pd.DataFrame(), 'threshold': threshold}, []
 
-        try:
-            cep = erminer.ERMiner(
-                tx_pos_list, 
-                tx_neg_list, 
-                min_sup=0.05, 
-                max_sup=0.5
-            )
-            cep.discover()
-            emerging_patterns = cep.get_emerging_patterns()
-        except Exception as e:
-            self.logger.error(f"CEP: ERMiner failed. Error: {e}")
-            return {'data': pd.DataFrame(), 'threshold': threshold}, []
+        # NOTE: ERMiner (contrast/emerging pattern mining) is not available in PAMI
+        # PAMI does not currently have a contrast pattern or emerging pattern mining module
+        # This analyzer is disabled until an alternative implementation is provided
+        self.logger.warning(
+            "CEP: Contrast pattern mining is not supported. "
+            "PAMI does not have an ERMiner or emerging pattern module. "
+            "This analysis is skipped."
+        )
+        return {'data': pd.DataFrame(), 'threshold': threshold}, []
 
-        cep_results = []
-        for pattern_str, supports in emerging_patterns.items():
-            sup_pos = supports[0]
-            sup_neg = supports[1]
-            growth_rate = sup_pos / sup_neg if sup_neg > 0 else float('inf')
-            cep_results.append({
-                'itemset': pattern_str,
-                'sup_Positive': sup_pos,
-                'sup_Negative': sup_neg,
-                'growth_rate': growth_rate
-            })
+        # # Original code (disabled - ERMiner doesn't exist in PAMI):
+        # try:
+        #     cep = erminer.ERMiner(
+        #         tx_pos_list,
+        #         tx_neg_list,
+        #         min_sup=0.05,
+        #         max_sup=0.5
+        #     )
+        #     cep.discover()
+        #     emerging_patterns = cep.get_emerging_patterns()
+        # except Exception as e:
+        #     self.logger.error(f"CEP: ERMiner failed. Error: {e}")
+        #     return {'data': pd.DataFrame(), 'threshold': threshold}, []
+        #
+        # cep_results = []
+        # for pattern_str, supports in emerging_patterns.items():
+        #     sup_pos = supports[0]
+        #     sup_neg = supports[1]
+        #     growth_rate = sup_pos / sup_neg if sup_neg > 0 else float('inf')
+        #     cep_results.append({
+        #         'itemset': pattern_str,
+        #         'sup_Positive': sup_pos,
+        #         'sup_Negative': sup_neg,
+        #         'growth_rate': growth_rate
+        #     })
 
-        if not cep_results:
-            self.logger.info("CEP: No emerging patterns found.")
-            return {'data': pd.DataFrame(), 'threshold': threshold}, []
-            
-        cep_df = pd.DataFrame(cep_results)
-        cep_df = cep_df[cep_df['growth_rate'] >= 2].sort_values(
-            'growth_rate', 
-            ascending=False
-        )
-        
-        plot_path = os.path.join(report_dir, f"{endpoint}_cep_plot.png")
-        cep_df_top10 = cep_df.head(10).sort_values('growth_rate', ascending=True)
-        
-        plt.figure(figsize=(10, 7))
-        sns.barplot(
-            data=cep_df_top10, 
-            x='growth_rate', 
-            y='itemset', 
-            palette='rocket'
-        )
-        plt.title(
-            f"Top 10 'Emerging' Patterns for {endpoint} "
-            f"(Activity > {threshold:.2f})", 
-            fontsize=16
-        )
-        plt.xlabel(
-            "Growth Rate (How much more frequent in 'Positive' class)", 
-            fontsize=12
-        )
-        plt.ylabel('Feature Pattern', fontsize=12)
-        plt.tight_layout()
-        plt.savefig(plot_path)
-        plt.close()
-
-        return {'data': cep_df, 'threshold': threshold}, [plot_path]
+        # # Rest of original code (disabled):
+        # if not cep_results:
+        #     self.logger.info("CEP: No emerging patterns found.")
+        #     return {'data': pd.DataFrame(), 'threshold': threshold}, []
+        #
+        # cep_df = pd.DataFrame(cep_results)
+        # cep_df = cep_df[cep_df['growth_rate'] >= 2].sort_values(
+        #     'growth_rate',
+        #     ascending=False
+        # )
+        #
+        # plot_path = os.path.join(report_dir, f"{endpoint}_cep_plot.png")
+        # cep_df_top10 = cep_df.head(10).sort_values('growth_rate', ascending=True)
+        #
+        # plt.figure(figsize=(10, 7))
+        # sns.barplot(
+        #     data=cep_df_top10,
+        #     x='growth_rate',
+        #     y='itemset',
+        #     palette='rocket'
+        # )
+        # plt.title(
+        #     f"Top 10 'Emerging' Patterns for {endpoint} "
+        #     f"(Activity > {threshold:.2f})",
+        #     fontsize=16
+        # )
+        # plt.xlabel(
+        #     "Growth Rate (How much more frequent in 'Positive' class)",
+        #     fontsize=12
+        # )
+        # plt.ylabel('Feature Pattern', fontsize=12)
+        # plt.tight_layout()
+        # plt.savefig(plot_path)
+        # plt.close()
+        #
+        # return {'data': cep_df, 'threshold': threshold}, [plot_path]
 
 
 class UtilityAnalyzer(BaseAnalyzer):
@@ -269,11 +317,11 @@ class UtilityAnalyzer(BaseAnalyzer):
 
         utilities = data[endpoint].clip(lower=0).values
         transactions = BaseDiscretizer()._df_to_transactions(tx_quantile)
-        
+
         utilities_int = (utilities * 100).astype(int)
         total_utility = np.sum(utilities_int)
         min_utility_threshold = int(total_utility * min_util_pct)
-        
+
         if total_utility == 0:
             self.logger.warning(
                 "HUIM: Skipping, total utility is zero "
@@ -281,18 +329,27 @@ class UtilityAnalyzer(BaseAnalyzer):
             )
             return {'data': pd.DataFrame()}, []
 
+        # Write transactions with utilities to temporary file for PAMI
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as tmp:
+            tmp_path = tmp.name
+            _write_utility_transactions_to_file(transactions, utilities_int, tmp_path)
+
         try:
-            huim = fhm.FHM(
-                transactions, 
-                utilities_int, 
-                min_utility=min_utility_threshold
-            )
-            huim.start()
-            high_utility_itemsets = huim.get_huim()
-            huim.stop()
+            # PAMI EFIM expects: EFIM(iFile, minUtil, sep)
+            huim = fhm.EFIM(iFile=tmp_path, minUtil=min_utility_threshold, sep='\t')
+            huim.mine()  # or startMine()
+
+            # Get patterns as dictionary
+            high_utility_itemsets = huim.getPatterns()
         except Exception as e:
-            self.logger.error(f"HUIM: FHM failed. Error: {e}")
+            self.logger.error(f"HUIM: EFIM failed. Error: {e}")
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
             return {'data': pd.DataFrame()}, []
+        finally:
+            # Clean up temporary file
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
 
         if not high_utility_itemsets:
             self.logger.info(
@@ -300,12 +357,18 @@ class UtilityAnalyzer(BaseAnalyzer):
                 f"min_util_pct={min_util_pct}."
             )
             return {'data': pd.DataFrame()}, []
-            
-        huim_df = pd.DataFrame(
-            high_utility_itemsets.items(), 
-            columns=['itemset', 'utility']
-        )
-        huim_df['itemset'] = huim_df['itemset'].apply(lambda x: ', '.join(x))
+
+        # Convert patterns dict to DataFrame
+        # PAMI returns patterns as {frozenset: support} or similar
+        huim_results = []
+        for pattern, utility in high_utility_itemsets.items():
+            if isinstance(pattern, (frozenset, set, tuple)):
+                itemset_str = ', '.join(str(item) for item in sorted(pattern))
+            else:
+                itemset_str = str(pattern)
+            huim_results.append({'itemset': itemset_str, 'utility': utility})
+
+        huim_df = pd.DataFrame(huim_results)
         huim_df = huim_df.sort_values('utility', ascending=False)
 
         plot_path = os.path.join(report_dir, f"{endpoint}_huim_plot.png")
@@ -360,65 +423,129 @@ class FrequencyAnalyzer(BaseAnalyzer):
         df_tx = tx_median.copy()
         df_tx['Class_Positive'] = (data[endpoint] > threshold)
         df_tx['Class_Negative'] = ~df_tx['Class_Positive']
-        
-        transactions = BaseDiscretizer()._df_to_transactions(df_tx)
-        
-        try:
-            fim = fpgrowth.FPGrowth(
-                transactions, 
-                min_sup=min_sup * len(transactions)
-            )
-            frequent_itemsets_fim = fim.discover()
-        except Exception as e:
-            self.logger.error(f"FIM: FPGrowth failed. Error: {e}")
-            return {'data': pd.DataFrame()}, []
 
-        if not frequent_itemsets_fim:
-            self.logger.info(
-                f"FIM: No frequent itemsets found with min_sup={min_sup}."
-            )
+        transactions = BaseDiscretizer()._df_to_transactions(df_tx)
+
+        # Write transactions to temporary file for PAMI
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as tmp_tx:
+            tmp_tx_path = tmp_tx.name
+            _write_transactions_to_file(transactions, tmp_tx_path, sep='\t')
+
+        # Create temp file for frequent patterns output
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as tmp_fp:
+            tmp_fp_path = tmp_fp.name
+
+        try:
+            # Run FPGrowth to find frequent patterns
+            # PAMI FPGrowth expects: FPGrowth(iFile, minSup, sep)
+            min_sup_count = int(min_sup * len(transactions))
+            fim = fpgrowth.FPGrowth(iFile=tmp_tx_path, minSup=min_sup_count, sep='\t')
+            fim.mine()  # or startMine()
+
+            # Save frequent patterns to file
+            fim.save(tmp_fp_path)
+
+            # Check if any patterns were found
+            frequent_itemsets = fim.getPatterns()
+            if not frequent_itemsets:
+                self.logger.info(
+                    f"FIM: No frequent itemsets found with min_sup={min_sup}."
+                )
+                os.unlink(tmp_tx_path)
+                os.unlink(tmp_fp_path)
+                return {'data': pd.DataFrame()}, []
+
+            # Generate association rules using confidence
+            # PAMI confidence expects: confidence(iFile, minConf, sep)
+            ar_miner = post_process.confidence(iFile=tmp_fp_path, minConf=min_conf, sep='\t')
+            ar_miner.mine()
+
+            # Get association rules as DataFrame
+            rule_df = ar_miner.getAssociationRulesAsDataFrame()
+
+        except Exception as e:
+            self.logger.error(f"FIM: FPGrowth/AssociationRules failed. Error: {e}")
+            if os.path.exists(tmp_tx_path):
+                os.unlink(tmp_tx_path)
+            if os.path.exists(tmp_fp_path):
+                os.unlink(tmp_fp_path)
             return {'data': pd.DataFrame()}, []
-            
-        rules = post_process.AssociationRules(
-            frequent_itemsets_fim, 
-            min_conf=min_conf
-        )
-        rule_df = rules.get_rules()
-        
+        finally:
+            # Clean up temporary files
+            if os.path.exists(tmp_tx_path):
+                os.unlink(tmp_tx_path)
+            if os.path.exists(tmp_fp_path):
+                os.unlink(tmp_fp_path)
+
         if rule_df.empty:
             self.logger.info(
                 f"FIM: No association rules found with min_conf={min_conf}."
             )
             return {'data': pd.DataFrame()}, []
-            
-        rules_pos = rule_df[
-            (rule_df['consequent'] == 'Class_Positive')
-        ].sort_values('lift', ascending=False)
 
-        plot_path = os.path.join(report_dir, f"{endpoint}_fim_plot.png")
-        plt.figure(figsize=(10, 6))
-        sns.scatterplot(
-            data=rule_df[
-                ~rule_df['consequent'].isin(['Class_Positive', 'Class_Negative'])
-            ],
-            x='support',
-            y='confidence',
-            hue='lift',
-            size='lift',
-            palette='viridis',
-            sizes=(20, 200),
-            alpha=0.7
-        )
-        plt.title(
-            f'FIM Association Rules for {endpoint} (min_sup={min_sup})', 
-            fontsize=16
-        )
-        plt.xlabel('Support', fontsize=12)
-        plt.ylabel('Confidence', fontsize=12)
-        plt.legend(title='Lift', bbox_to_anchor=(1.05, 1), loc=2)
-        plt.grid(True, linestyle='--', alpha=0.5)
-        plt.tight_layout()
-        plt.savefig(plot_path)
-        plt.close()
-        
-        return {'data': rules_pos}, [plot_path]
+        # Filter for rules that predict Class_Positive
+        # The column names should be: Antecedent, Consequent, Support, Confidence
+        if 'Consequent' in rule_df.columns:
+            rules_pos = rule_df[
+                rule_df['Consequent'].str.contains('Class_Positive', na=False)
+            ]
+            if 'Confidence' in rule_df.columns:
+                rules_pos = rules_pos.sort_values('Confidence', ascending=False)
+        else:
+            # If column names are different, use all rules
+            rules_pos = rule_df
+
+        # Generate plot if we have rules to visualize
+        plot_paths = []
+        if not rule_df.empty and len(rule_df) > 1:
+            # Normalize column names to lowercase for consistency
+            rule_df_plot = rule_df.copy()
+            rule_df_plot.columns = [col.lower() for col in rule_df_plot.columns]
+
+            # Filter out Class_Positive and Class_Negative from consequent for general plot
+            if 'consequent' in rule_df_plot.columns:
+                plot_data = rule_df_plot[
+                    ~rule_df_plot['consequent'].astype(str).str.contains(
+                        'Class_Positive|Class_Negative',
+                        na=False,
+                        case=False
+                    )
+                ]
+            else:
+                plot_data = rule_df_plot
+
+            if not plot_data.empty:
+                plot_path = os.path.join(report_dir, f"{endpoint}_fim_plot.png")
+                plt.figure(figsize=(10, 6))
+
+                # Check which columns exist for plotting
+                x_col = 'support' if 'support' in plot_data.columns else plot_data.columns[2]
+                y_col = 'confidence' if 'confidence' in plot_data.columns else plot_data.columns[3]
+
+                # Use lift if available, otherwise use confidence for hue
+                hue_col = 'lift' if 'lift' in plot_data.columns else y_col
+
+                sns.scatterplot(
+                    data=plot_data,
+                    x=x_col,
+                    y=y_col,
+                    hue=hue_col,
+                    size=hue_col,
+                    palette='viridis',
+                    sizes=(20, 200),
+                    alpha=0.7
+                )
+                plt.title(
+                    f'FIM Association Rules for {endpoint} (min_sup={min_sup})',
+                    fontsize=16
+                )
+                plt.xlabel(x_col.capitalize(), fontsize=12)
+                plt.ylabel(y_col.capitalize(), fontsize=12)
+                plt.legend(title=hue_col.capitalize(), bbox_to_anchor=(1.05, 1), loc=2)
+                plt.grid(True, linestyle='--', alpha=0.5)
+                plt.tight_layout()
+                plt.savefig(plot_path)
+                plt.close()
+                plot_paths.append(plot_path)
+
+        return {'data': rules_pos}, plot_paths
